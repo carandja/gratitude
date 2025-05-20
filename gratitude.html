@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gratitude Diary</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn { animation: fadeIn 0.5s ease-out forwards; }
+
+        @keyframes fadeOutItem { /* For deleting list items */
+            from { opacity: 1; transform: scale(1); }
+            to { opacity: 0; transform: scale(0.95); }
+        }
+        .animate-fadeOutItem { animation: fadeOutItem 0.3s ease-out forwards; }
+
+        @keyframes slideInRight { /* For toast notifications */
+            from { opacity: 0; transform: translateX(100%); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        .animate-slideInRight { animation: slideInRight 0.3s ease-out forwards; }
+        
+        @keyframes fadeOutToast { /* For toast notifications */
+            from { opacity: 1; transform: translateX(0); }
+            to { opacity: 0; transform: translateX(100%); }
+        }
+        .animate-fadeOutToast { animation: fadeOutToast 0.3s ease-out forwards; }
+
+        @keyframes scaleUp { /* For modal content */
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .animate-scaleUp { animation: scaleUp 0.3s ease-out forwards; }
+
+        @keyframes fadeOutModalBackdrop { /* For modal backdrop */
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+        .animate-fadeOutModalBackdrop { animation: fadeOutModalBackdrop 0.3s ease-out forwards; }
+
+        @keyframes scaleDownModalContent { /* For modal content on close */
+            from { opacity: 1; transform: scale(1); }
+            to { opacity: 0; transform: scale(0.95); }
+        }
+        .animate-scaleDownModalContent { animation: scaleDownModalContent 0.3s ease-out forwards; }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; /* Tailwind gray-300 */ border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; /* Tailwind gray-400 */ }
+        ::selection { background-color: #c7d2fe; /* Tailwind indigo-200 */ color: #3730a3; /* Tailwind indigo-800 */ }
+
+        /* Rating Stars */
+        .rating-stars button {
+            background: none; border: none; padding: 0.25rem; cursor: pointer;
+            color: #e0e0e0; /* Light gray for empty star */
+            font-size: 1.75rem; /* Larger stars */
+            line-height: 1;
+            transition: color 0.2s ease-in-out, transform 0.1s ease-in-out;
+        }
+        .rating-stars button:hover { transform: scale(1.1); }
+        .rating-stars button.selected, .rating-stars button.hovered { color: #fbbf24; /* Tailwind amber-400 */ }
+        
+        .entry-rating-display .star { font-size: 1rem; color: #fbbf24; /* Tailwind amber-400 */ }
+        .entry-rating-display .star.empty { color: #d1d5db; /* Tailwind gray-300 */ }
+
+        /* Category Badge */
+        .category-badge {
+            font-size: 0.7rem; 
+            padding: 0.15rem 0.5rem; 
+            border-radius: 9999px; /* Pill shape */
+            background-color: #e5e7eb; /* Tailwind gray-200 */
+            color: #374151; /* Tailwind gray-700 */
+            display: inline-block; 
+            margin-top: 0.25rem; 
+        }
+        /* Hidden file input for import */
+        .hidden-file-input {
+            width: 0.1px;
+            height: 0.1px;
+            opacity: 0;
+            overflow: hidden;
+            position: absolute;
+            z-index: -1;
+        }
+        /* Chart container styling */
+        #chart-container {
+            position: relative; /* Needed for Chart.js responsiveness */
+            height: 300px; /* Default height, adjust as needed */
+            width: 100%;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-purple-100 via-indigo-100 to-pink-100 text-gray-800 min-h-screen flex flex-col items-center p-4">
+
+    <div id="toast-container" class="fixed top-5 right-5 z-50 w-full max-w-xs sm:max-w-sm"></div>
+
+    <div id="modal-container" class="hidden"></div>
+
+    <main class="bg-white/80 backdrop-blur-lg shadow-2xl rounded-xl p-6 md:p-10 w-full max-w-2xl transform transition-all duration-500 hover:scale-[1.01] mb-10">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-500 via-indigo-500 to-pink-500">
+                My Gratitude Diary
+            </h1>
+            <p class="text-gray-600 mt-2 text-sm md:text-base">"Gratitude turns what we have into enough."</p>
+        </header>
+
+        <section id="input-area" class="mb-8">
+            <label for="gratitude-input" class="block text-lg font-semibold text-gray-700 mb-2">What are you grateful for today?</label>
+            <textarea id="gratitude-input" rows="4" placeholder="Today I am grateful for..." class="w-full p-3 border-2 border-gray-300 rounded-lg focus:ring-4 focus:ring-indigo-500/50 focus:border-indigo-500 transition-shadow resize-none shadow-sm text-base"></textarea>
+            <div class="text-right text-sm text-gray-500 mt-1" id="char-count-main">0/500</div>
+
+            <div class="mt-4">
+                <label class="block text-sm font-medium text-gray-600 mb-1">How strongly do you feel this gratitude?</label>
+                <div id="rating-selector-main" class="rating-stars flex space-x-1 items-center">
+                    <button data-value="1" aria-label="Rate 1 out of 3">★</button>
+                    <button data-value="2" aria-label="Rate 2 out of 3">★</button>
+                    <button data-value="3" aria-label="Rate 3 out of 3">★</button>
+                </div>
+            </div>
+
+            <div class="mt-4">
+                <label for="category-selector-main" class="block text-sm font-medium text-gray-600 mb-1">Category (Optional)</label>
+                <select id="category-selector-main" class="w-full p-3 border-2 border-gray-300 rounded-lg focus:ring-indigo-500/50 focus:border-indigo-500 transition-shadow shadow-sm text-base">
+                </select>
+                <input type="text" id="new-category-input-main" placeholder="Enter new category name" class="hidden w-full p-3 mt-2 border-2 border-gray-300 rounded-lg focus:ring-indigo-500/50 focus:border-indigo-500 transition-shadow shadow-sm text-base">
+            </div>
+
+            <button id="add-entry-button" class="mt-6 w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-indigo-500/50">
+                Add to Diary
+            </button>
+        </section>
+
+        <section id="entries-section" class="mb-8">
+            <h2 class="text-2xl font-semibold text-gray-700 mb-6 pb-2 border-b-2 border-indigo-200">My Entries</h2>
+            <div id="entries-list" class="space-y-6 max-h-[50vh] overflow-y-auto pr-2">
+            </div>
+        </section>
+
+        <section id="report-section" class="mt-8 pt-6 border-t-2 border-indigo-200">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">Gratitude Report</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 items-end">
+                <div>
+                    <label for="report-start-date" class="block text-sm font-medium text-gray-600">Start Date:</label>
+                    <input type="date" id="report-start-date" class="w-full p-2 mt-1 border-2 border-gray-300 rounded-lg focus:ring-indigo-500/50 focus:border-indigo-500 text-sm">
+                </div>
+                <div>
+                    <label for="report-end-date" class="block text-sm font-medium text-gray-600">End Date:</label>
+                    <input type="date" id="report-end-date" class="w-full p-2 mt-1 border-2 border-gray-300 rounded-lg focus:ring-indigo-500/50 focus:border-indigo-500 text-sm">
+                </div>
+                <button id="generate-report-button" class="md:col-span-1 bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2.5 px-4 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-opacity-75 h-fit text-sm">
+                    Generate Report
+                </button>
+            </div>
+            <div id="chart-container" class="bg-white p-2 sm:p-4 rounded-lg shadow">
+                <canvas id="gratitude-chart"></canvas>
+                <p id="no-report-data" class="text-center text-gray-500 italic hidden py-8">No data available for the selected period or no entries yet.</p>
+            </div>
+        </section>
+
+        <section id="data-management" class="mt-8 pt-6 border-t-2 border-indigo-200">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">Data Management</h2>
+            <div class="flex flex-col sm:flex-row sm:space-x-4 space-y-3 sm:space-y-0">
+                <button id="export-button" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-75 text-sm">
+                    Export Data
+                </button>
+                <label for="import-file-input" class="flex-1 bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 ease-in-out cursor-pointer text-center focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-opacity-75 text-sm">
+                    Import Data
+                </label>
+                <input type="file" id="import-file-input" class="hidden-file-input" accept=".json">
+            </div>
+        </section>
+    </main>
+
+    <footer class="text-center mt-10 text-gray-500 text-sm">
+        <p>&copy; <span id="currentYear"></span> Gratitude Diary. Cultivate Joy.</p>
+    </footer>
+
+    <script>
+        // --- Global State & Constants ---
+        let entries = [];
+        let categories = ["Personal", "Work", "Family", "Nature", "Health", "Learning"]; 
+        const APP_VERSION = "gratitude_diary_v1.4"; // Updated App Version
+        const MAX_CHARS = 500;
+        let currentSelectedMainRating = 0;
+        let currentSelectedEditRating = 0;
+        const DEFAULT_CATEGORY_NONE = "None";
+        const DEFAULT_CATEGORY_ADD_NEW = "Add New...";
+        let gratitudeChartInstance = null; // For Chart.js instance
+
+        // --- DOM Elements ---
+        const mainEntryInput = document.getElementById('gratitude-input');
+        const mainAddButton = document.getElementById('add-entry-button');
+        const entriesList = document.getElementById('entries-list');
+        const mainCharCountElement = document.getElementById('char-count-main');
+        const mainRatingSelector = document.getElementById('rating-selector-main');
+        const mainCategorySelector = document.getElementById('category-selector-main');
+        const mainNewCategoryInput = document.getElementById('new-category-input-main');
+        const toastContainer = document.getElementById('toast-container');
+        const modalContainer = document.getElementById('modal-container');
+        const exportButton = document.getElementById('export-button');
+        const importFileInput = document.getElementById('import-file-input');
+        const reportStartDateInput = document.getElementById('report-start-date');
+        const reportEndDateInput = document.getElementById('report-end-date');
+        const generateReportButton = document.getElementById('generate-report-button');
+        const chartContainer = document.getElementById('chart-container'); // Parent for chart canvas
+        const gratitudeChartCanvas = document.getElementById('gratitude-chart');
+        const noReportDataP = document.getElementById('no-report-data');
+
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            loadEntries();
+            loadCategories(); 
+
+            // Setup for main entry form
+            if (mainEntryInput && mainCharCountElement && mainAddButton && mainRatingSelector && mainCategorySelector && mainNewCategoryInput) {
+                setupFormValidation(
+                    mainEntryInput, mainCharCountElement, mainAddButton, MAX_CHARS, 
+                    () => currentSelectedMainRating, 
+                    () => mainCategorySelector, 
+                    () => mainNewCategoryInput
+                );
+                setupRatingSelector(mainRatingSelector, (rating) => {
+                    currentSelectedMainRating = rating;
+                    // Re-validate form when rating changes
+                    setupFormValidation(mainEntryInput, mainCharCountElement, mainAddButton, MAX_CHARS, () => currentSelectedMainRating, () => mainCategorySelector, () => mainNewCategoryInput);
+                });
+                populateCategoryDropdown(mainCategorySelector, categories);
+                mainCategorySelector.addEventListener('change', () => handleCategoryChange(mainCategorySelector, mainNewCategoryInput, () => {
+                     // Re-validate form when category selection changes
+                     setupFormValidation(mainEntryInput, mainCharCountElement, mainAddButton, MAX_CHARS, () => currentSelectedMainRating, () => mainCategorySelector, () => mainNewCategoryInput);
+                }));
+                 mainNewCategoryInput.addEventListener('input', () => { // Also validate on new category input
+                    setupFormValidation(mainEntryInput, mainCharCountElement, mainAddButton, MAX_CHARS, () => currentSelectedMainRating, () => mainCategorySelector, () => mainNewCategoryInput);
+                });
+            }
+            // Event listeners for main buttons
+            if (mainAddButton) mainAddButton.addEventListener('click', addEntry);
+            if (exportButton) exportButton.addEventListener('click', exportData);
+            if (importFileInput) importFileInput.addEventListener('change', handleImportFile);
+            
+            // Initialize report section
+            if (generateReportButton && reportStartDateInput && reportEndDateInput) {
+                initializeReportSection();
+                generateReportButton.addEventListener('click', generateReport);
+            }
+            
+            // Set current year in footer
+            document.getElementById('currentYear').textContent = new Date().getFullYear();
+        });
+
+        // --- Form Validation (Text, Rating, Category) ---
+        function setupFormValidation(inputEl, countEl, submitEl, maxLength, getRatingFn, getCategorySelectFn, getNewCategoryInputFn) {
+            if (!inputEl || !submitEl || !getRatingFn || !getCategorySelectFn || !getNewCategoryInputFn) return;
+
+            const updateValidity = () => {
+                const currentChars = inputEl.value.length;
+                if (countEl) countEl.textContent = `${currentChars}/${maxLength}`;
+                
+                // Check conditions for disabling the submit button
+                const textIsEmpty = inputEl.value.trim() === "";
+                const textTooLong = currentChars > maxLength;
+                const ratingNotSelected = getRatingFn() === 0;
+
+                const categorySelectEl = getCategorySelectFn();
+                const newCategoryInputEl = getNewCategoryInputFn();
+                let categoryInputInvalid = false;
+                if (categorySelectEl && newCategoryInputEl) {
+                    // If "Add New..." is selected, the new category input must not be empty
+                    if (categorySelectEl.value === DEFAULT_CATEGORY_ADD_NEW && newCategoryInputEl.value.trim() === "") {
+                        categoryInputInvalid = true;
+                        newCategoryInputEl.classList.add('border-red-500', 'focus:ring-red-500/50');
+                        newCategoryInputEl.classList.remove('focus:border-indigo-500');
+                    } else if (newCategoryInputEl) { // Reset styles if valid or not in "Add New..." mode
+                        newCategoryInputEl.classList.remove('border-red-500', 'focus:ring-red-500/50');
+                        newCategoryInputEl.classList.add('focus:border-indigo-500');
+                    }
+                }
+                
+                const disableButton = textIsEmpty || textTooLong || ratingNotSelected || categoryInputInvalid;
+                
+                // Style input for text length error
+                if (textTooLong) {
+                    if (countEl) countEl.classList.add('text-red-500', 'font-semibold');
+                    inputEl.classList.add('border-red-500', 'focus:ring-red-500/50', 'focus:border-red-500');
+                    inputEl.classList.remove('focus:ring-indigo-500/50', 'focus:border-indigo-500');
+                } else {
+                    if (countEl) countEl.classList.remove('text-red-500', 'font-semibold');
+                    inputEl.classList.remove('border-red-500', 'focus:ring-red-500/50', 'focus:border-red-500');
+                    inputEl.classList.add('focus:ring-indigo-500/50', 'focus:border-indigo-500');
+                }
+
+                // Enable/disable submit button and style accordingly
+                submitEl.disabled = disableButton;
+                submitEl.classList.toggle('opacity-50', disableButton);
+                submitEl.classList.toggle('cursor-not-allowed', disableButton);
+            };
+
+            // Add event listeners to trigger validation
+            inputEl.addEventListener('input', updateValidity);
+            if(getCategorySelectFn()) getCategorySelectFn().addEventListener('change', updateValidity);
+            if(getNewCategoryInputFn()) getNewCategoryInputFn().addEventListener('input', updateValidity);
+            // Rating updates validity via its own callback in setupRatingSelector, which then calls this.
+            updateValidity(); // Initial call to set button state
+        }
+        
+        // --- Rating Selector Logic ---
+        function setupRatingSelector(selectorElement, onRatingSelectedCallback, initialRating = 0) {
+            if (!selectorElement) return;
+            const buttons = selectorElement.querySelectorAll('button');
+            
+            function updateStars(selectedValue) {
+                buttons.forEach(btn => {
+                    btn.classList.remove('selected');
+                    if (parseInt(btn.dataset.value) <= selectedValue) {
+                        btn.classList.add('selected');
+                    }
+                });
+            }
+
+            buttons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const value = parseInt(button.dataset.value);
+                    updateStars(value);
+                    if (onRatingSelectedCallback) onRatingSelectedCallback(value);
+                });
+                // Visual feedback on hover
+                button.addEventListener('mouseover', () => {
+                    const hoverValue = parseInt(button.dataset.value);
+                    buttons.forEach(btn => {
+                        btn.classList.remove('hovered');
+                        if (parseInt(btn.dataset.value) <= hoverValue) { btn.classList.add('hovered'); }
+                    });
+                });
+                button.addEventListener('mouseout', () => {
+                    buttons.forEach(btn => btn.classList.remove('hovered'));
+                    // Re-apply selection based on actual current rating (main form or edit modal)
+                    const currentContextRating = selectorElement.id.includes('main') ? currentSelectedMainRating : currentSelectedEditRating;
+                    updateStars(currentContextRating);
+                });
+            });
+            updateStars(initialRating); // Set initial state
+        }
+        
+        // --- Category Logic ---
+        function populateCategoryDropdown(selectElement, categoryList, currentCategoryValue = DEFAULT_CATEGORY_NONE) {
+            if (!selectElement) return;
+            const previousValue = selectElement.value; // Preserve current selection if possible during repopulate
+            selectElement.innerHTML = ''; // Clear existing options
+
+            // Add "None" option
+            const noneOption = document.createElement('option');
+            noneOption.value = DEFAULT_CATEGORY_NONE;
+            noneOption.textContent = DEFAULT_CATEGORY_NONE;
+            selectElement.appendChild(noneOption);
+
+            // Add sorted list of actual categories
+            categoryList.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())).forEach(cat => {
+                // Ensure control values aren't added as regular categories
+                if (cat === DEFAULT_CATEGORY_NONE || cat === DEFAULT_CATEGORY_ADD_NEW) return; 
+                const option = document.createElement('option');
+                option.value = cat;
+                option.textContent = cat;
+                selectElement.appendChild(option);
+            });
+
+            // Add "Add New..." option
+            const addNewOption = document.createElement('option');
+            addNewOption.value = DEFAULT_CATEGORY_ADD_NEW;
+            addNewOption.textContent = DEFAULT_CATEGORY_ADD_NEW;
+            selectElement.appendChild(addNewOption);
+            
+            // Try to restore previous selection or default to the passed currentCategoryValue or "None"
+            if (categoryList.includes(previousValue) || previousValue === DEFAULT_CATEGORY_NONE || previousValue === DEFAULT_CATEGORY_ADD_NEW) {
+                 selectElement.value = previousValue;
+            } else if (categoryList.includes(currentCategoryValue)) {
+                 selectElement.value = currentCategoryValue;
+            }
+             else {
+                 selectElement.value = DEFAULT_CATEGORY_NONE;
+            }
+        }
+
+        function handleCategoryChange(selectElement, newCategoryInputElement, validationCallback) {
+            if (!selectElement || !newCategoryInputElement) return;
+            // Show/hide the new category input field based on selection
+            if (selectElement.value === DEFAULT_CATEGORY_ADD_NEW) {
+                newCategoryInputElement.classList.remove('hidden');
+                newCategoryInputElement.focus();
+            } else {
+                newCategoryInputElement.classList.add('hidden');
+                newCategoryInputElement.value = ''; // Clear if user switches away
+            }
+            if (validationCallback) validationCallback(); // Trigger form re-validation
+        }
+
+        function getSelectedCategory(categorySelectElement, newCategoryInputElement) {
+            let selectedCategoryValue = categorySelectElement.value;
+            if (selectedCategoryValue === DEFAULT_CATEGORY_ADD_NEW) {
+                const newCatName = newCategoryInputElement.value.trim();
+                if (newCatName) {
+                    // Check if category (case-insensitive) already exists
+                    const existingCategory = categories.find(c => c.toLowerCase() === newCatName.toLowerCase());
+                    if (!existingCategory) { // If new and unique
+                        categories.push(newCatName);
+                        saveCategories();
+                        // Repopulate relevant dropdowns, preserving current selection if possible
+                        populateCategoryDropdown(mainCategorySelector, categories, newCatName);
+                        const editCategorySelector = document.getElementById('category-selector-edit'); // If edit modal is open
+                        if (editCategorySelector) populateCategoryDropdown(editCategorySelector, categories, newCatName);
+                        selectedCategoryValue = newCatName; // Use the newly added name
+                    } else { // If category exists, use the existing casing
+                        selectedCategoryValue = existingCategory; 
+                        showToast(`Category "${newCatName}" already exists as "${existingCategory}". Using existing.`, "info");
+                    }
+                } else {
+                    // "Add New..." selected but input is empty. Validation should catch this.
+                    return null; // Or handle as error if "Add New" is selected but input is empty
+                }
+            }
+            return selectedCategoryValue === DEFAULT_CATEGORY_NONE ? null : selectedCategoryValue; // Store null if "None"
+        }
+
+
+        function loadCategories() {
+            try {
+                const storedCategories = localStorage.getItem('gratitudeCategories');
+                if (storedCategories) {
+                    const parsedCategories = JSON.parse(storedCategories);
+                    // Merge default categories with stored ones, ensuring uniqueness
+                    const combined = [...new Set([...categories, ...parsedCategories])]; 
+                    // Filter out any control values that might have been accidentally saved
+                    categories = combined.filter(cat => cat && typeof cat === 'string' && cat !== DEFAULT_CATEGORY_NONE && cat !== DEFAULT_CATEGORY_ADD_NEW);
+                }
+            } catch (e) {
+                console.error("Error loading categories:", e);
+                // Keep default categories if loading fails
+            }
+            // Ensure default categories are present if the list is empty after loading/parsing
+            if (categories.length === 0) {
+                categories = ["Personal", "Work", "Family", "Nature", "Health", "Learning"];
+            }
+            categories = [...new Set(categories)]; // Final deduplication
+            saveCategories(); // Save potentially merged/cleaned list
+        }
+
+
+        function saveCategories() {
+            try {
+                // Filter out any accidental "None" or "Add New..." before saving
+                const validCategories = categories.filter(cat => cat !== DEFAULT_CATEGORY_NONE && cat !== DEFAULT_CATEGORY_ADD_NEW);
+                localStorage.setItem('gratitudeCategories', JSON.stringify([...new Set(validCategories)]));
+            } catch (e) {
+                console.error("Error saving categories:", e);
+            }
+        }
+
+        // --- Core Gratitude Entry Functions ---
+        function addEntry() {
+            if (!mainEntryInput || !mainAddButton) return;
+            const text = mainEntryInput.value.trim();
+            const finalCategory = getSelectedCategory(mainCategorySelector, mainNewCategoryInput);
+
+            // Validation is primarily handled by setupFormValidation, but check criticals again
+            if (text === "" || currentSelectedMainRating === 0 || (mainCategorySelector.value === DEFAULT_CATEGORY_ADD_NEW && mainNewCategoryInput.value.trim() === "")) {
+                 if (text === "") showToast("Gratitude entry cannot be empty.", "warning");
+                 if (currentSelectedMainRating === 0) showToast("Please select a rating.", "warning");
+                 if (mainCategorySelector.value === DEFAULT_CATEGORY_ADD_NEW && mainNewCategoryInput.value.trim() === "") showToast("Please enter new category name or select existing.", "warning");
+                return;
+            }
+            if (text.length > MAX_CHARS) {
+                showToast(`Entry is too long! Maximum ${MAX_CHARS} characters.`, "error"); return;
+            }
+
+            const newEntry = {
+                id: Date.now(), 
+                text: text,
+                date: new Date().toISOString(),
+                rating: currentSelectedMainRating,
+                category: finalCategory // This can be null if "None" was selected
+            };
+
+            entries.unshift(newEntry); // Add to the beginning for newest first
+            saveEntries();
+            renderEntries();
+            
+            // Reset main form fields
+            mainEntryInput.value = ""; 
+            currentSelectedMainRating = 0; 
+            if (mainRatingSelector) setupRatingSelector(mainRatingSelector, (r) => { currentSelectedMainRating = r; setupFormValidation(mainEntryInput, mainCharCountElement, mainAddButton, MAX_CHARS, () => currentSelectedMainRating, () => mainCategorySelector, () => mainNewCategoryInput);}, 0);
+            
+            populateCategoryDropdown(mainCategorySelector, categories, DEFAULT_CATEGORY_NONE); // Reset category dropdown
+            mainNewCategoryInput.value = ''; // Clear new category input
+            mainNewCategoryInput.classList.add('hidden'); // Hide it
+
+            setupFormValidation(mainEntryInput, mainCharCountElement, mainAddButton, MAX_CHARS, () => currentSelectedMainRating, () => mainCategorySelector, () => mainNewCategoryInput); // Re-validate
+            mainEntryInput.focus();
+            showToast("Gratitude added successfully!", "success");
+            generateReport(); // Optionally auto-update report after adding an entry
+        }
+
+        function deleteEntry(id) {
+            entries = entries.filter(entry => entry.id !== id);
+            saveEntries();
+            renderEntries();
+            showToast("Entry removed.", "info");
+            generateReport(); // Optionally auto-update report
+        }
+
+        function saveEditedEntry(id, newText, newRating, newCategory) {
+            const entryIndex = entries.findIndex(entry => entry.id === id);
+            if (entryIndex === -1) {
+                showToast("Error: Could not find entry to update.", "error"); return;
+            }
+            entries[entryIndex].text = newText;
+            entries[entryIndex].rating = newRating;
+            entries[entryIndex].category = newCategory; // Can be null
+            
+            saveEntries();
+            renderEntries();
+            closeModal();
+            showToast("Entry updated successfully!", "success");
+            generateReport(); // Optionally auto-update report
+        }
+
+        // --- Rendering Entries to DOM ---
+        function renderRatingStars(rating) {
+            let starsHTML = '';
+            for (let i = 1; i <= 3; i++) {
+                starsHTML += `<span class="star ${i <= rating ? '' : 'empty'}">★</span>`;
+            }
+            return `<div class="entry-rating-display flex items-center text-xs text-gray-500 mt-1">
+                        <span class="mr-1">Felt:</span> ${starsHTML}
+                    </div>`;
+        }
+
+        function renderEntries() {
+            if (!entriesList) return;
+            entriesList.innerHTML = ""; // Clear current list
+
+            if (entries.length === 0) {
+                entriesList.innerHTML = `<p class="text-center text-gray-500 italic py-4">No entries yet. What are you grateful for today?</p>`;
+                return;
+            }
+
+            entries.forEach(entry => {
+                const entryElement = document.createElement('div');
+                entryElement.className = 'bg-white p-5 rounded-xl shadow-lg transition-all duration-300 hover:shadow-xl relative animate-fadeIn';
+                
+                const entryDate = new Date(entry.date);
+                const formattedDate = entryDate.toLocaleDateString(navigator.language || 'en-US', {
+                    year: 'numeric', month: 'long', day: 'numeric',
+                    hour: '2-digit', minute: '2-digit', hour12: true
+                });
+
+                const safeText = escapeHTML(entry.text);
+                const ratingDisplay = renderRatingStars(entry.rating || 0); // Handle if rating is undefined
+                let categoryDisplay = '';
+                if (entry.category && entry.category !== DEFAULT_CATEGORY_NONE) { // Check if category exists and is not "None"
+                    categoryDisplay = `<div class="mt-2"><span class="category-badge">${escapeHTML(entry.category)}</span></div>`;
+                }
+
+                entryElement.innerHTML = `
+                    <p class="text-xs text-indigo-600 font-medium mb-1">${formattedDate}</p>
+                    <p class="text-gray-700 text-base leading-relaxed whitespace-pre-wrap">${safeText}</p>
+                    ${ratingDisplay}
+                    ${categoryDisplay}
+                    <div class="absolute top-3 right-3 flex space-x-1">
+                        <button aria-label="Edit entry" class="edit-button text-gray-400 hover:text-indigo-600 transition-colors p-1 rounded-full hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50" data-id="${entry.id}">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 pointer-events-none">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
+                            </svg>
+                        </button>
+                        <button aria-label="Delete entry" class="delete-button text-gray-400 hover:text-red-600 transition-colors p-1 rounded-full hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50" data-id="${entry.id}">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 pointer-events-none">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12.56 0c.342.052.682.107 1.022.166m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                            </svg>
+                        </button>
+                    </div>
+                `;
+                const list = entriesList; 
+                if (list) list.appendChild(entryElement);
+
+                // Add event listeners to the new buttons
+                const editButton = entryElement.querySelector('.edit-button');
+                if (editButton) {
+                    editButton.addEventListener('click', (event) => {
+                        const actualButton = event.currentTarget; // Use currentTarget
+                        if (actualButton && actualButton.dataset.id) {
+                            showEditModal(parseInt(actualButton.dataset.id));
+                        }
+                    });
+                }
+                const deleteButton = entryElement.querySelector('.delete-button');
+                if (deleteButton) {
+                    deleteButton.addEventListener('click', (event) => {
+                        const actualButton = event.currentTarget; // Use currentTarget
+                        if (actualButton && actualButton.dataset.id) {
+                            showConfirmationModal("Are you sure you want to delete this entry? This action cannot be undone.", () => {
+                                deleteEntry(parseInt(actualButton.dataset.id));
+                            }, "Delete", "bg-red-600 hover:bg-red-700");
+                        }
+                    });
+                }
+            });
+        }
+
+        // --- Local Storage Interaction ---
+        function saveEntries() {
+            try {
+                localStorage.setItem('gratitudeEntries', JSON.stringify(entries));
+            } catch (e) { console.error("Error saving entries:", e); showToast("Could not save entries.", "error");}
+        }
+        function loadEntries() {
+            try {
+                const storedEntries = localStorage.getItem('gratitudeEntries');
+                if (storedEntries) { entries = JSON.parse(storedEntries); }
+            } catch (e) { console.error("Error loading entries:", e); entries = []; showToast("Could not load entries.", "error");}
+            renderEntries(); 
+        }
+
+        // --- Utility Functions ---
+        function escapeHTML(str) {
+            if (typeof str !== 'string') return '';
+            return str.replace(/[&<>"']/g, match => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[match]));
+        }
+
+        // --- Toast Notifications ---
+        function showToast(message, type = "info") {
+            if (!toastContainer) return;
+            const toast = document.createElement('div');
+            toast.className = `p-4 rounded-lg shadow-xl text-white mb-3 animate-slideInRight text-sm`;
+            const colors = {"success": "bg-green-500", "error": "bg-red-500", "warning": "bg-yellow-600", "info": "bg-blue-500"};
+            toast.classList.add(colors[type] || colors.info); // Default to info color
+            toast.textContent = message;
+            toastContainer.appendChild(toast);
+            // Auto-remove toast
+            setTimeout(() => {
+                toast.classList.remove('animate-slideInRight');
+                toast.classList.add('animate-fadeOutToast');
+                setTimeout(() => toast.remove(), 300); // Corresponds to fadeOut animation
+            }, 3000); // Toast visible for 3 seconds
+        }
+        
+        // --- Edit Modal ---
+        function showEditModal(entryId) {
+            const entryToEdit = entries.find(e => e.id === entryId);
+            if (!entryToEdit) { showToast("Error: Could not find entry.", "error"); return; }
+            currentSelectedEditRating = entryToEdit.rating || 0; // Set current rating for the modal
+            closeModal(true); // Close any other modal instantly
+
+            modalContainer.innerHTML = `
+                <div id="edit-modal-backdrop" class="fixed inset-0 bg-gray-900 bg-opacity-70 flex items-center justify-center p-4 z-40 animate-fadeIn">
+                    <div class="bg-white p-6 rounded-lg shadow-xl max-w-lg w-full animate-scaleUp">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-4">Edit Gratitude Entry</h3>
+                        <textarea id="edit-gratitude-input" rows="5" class="w-full p-3 border-2 border-gray-300 rounded-lg focus:ring-4 focus:ring-indigo-500/50 focus:border-indigo-500 transition-shadow resize-none shadow-sm text-base">${escapeHTML(entryToEdit.text)}</textarea>
+                        <div class="text-right text-sm text-gray-500 mt-1" id="char-count-edit">0/${MAX_CHARS}</div>
+                        
+                        <div class="mt-4">
+                            <label class="block text-sm font-medium text-gray-600 mb-1">Update feeling strength:</label>
+                            <div id="rating-selector-edit" class="rating-stars flex space-x-1 items-center">
+                                <button data-value="1" aria-label="Rate 1 out of 3">★</button>
+                                <button data-value="2" aria-label="Rate 2 out of 3">★</button>
+                                <button data-value="3" aria-label="Rate 3 out of 3">★</button>
+                            </div>
+                        </div>
+
+                        <div class="mt-4">
+                            <label for="category-selector-edit" class="block text-sm font-medium text-gray-600 mb-1">Category (Optional)</label>
+                            <select id="category-selector-edit" class="w-full p-3 border-2 border-gray-300 rounded-lg focus:ring-indigo-500/50 focus:border-indigo-500 transition-shadow shadow-sm text-base"></select>
+                            <input type="text" id="new-category-input-edit" placeholder="Enter new category name" class="hidden w-full p-3 mt-2 border-2 border-gray-300 rounded-lg focus:ring-indigo-500/50 focus:border-indigo-500 transition-shadow shadow-sm text-base">
+                        </div>
+
+                        <div class="flex justify-end space-x-3 mt-6">
+                            <button id="modal-cancel" class="px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400">Cancel</button>
+                            <button id="edit-save-button" class="px-4 py-2 text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 font-bold rounded-lg shadow-md hover:shadow-lg transition-all">Save Changes</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            modalContainer.classList.remove('hidden');
+
+            // Get elements from the newly created modal
+            const editInput = document.getElementById('edit-gratitude-input');
+            const editCharCount = document.getElementById('char-count-edit');
+            const editSaveButton = document.getElementById('edit-save-button');
+            const editRatingSelector = document.getElementById('rating-selector-edit');
+            const editCategorySelector = document.getElementById('category-selector-edit');
+            const editNewCategoryInput = document.getElementById('new-category-input-edit');
+
+            // Setup validation and selectors for the edit modal
+            if (editInput && editCharCount && editSaveButton && editRatingSelector && editCategorySelector && editNewCategoryInput) {
+                 setupFormValidation(editInput, editCharCount, editSaveButton, MAX_CHARS, 
+                    () => currentSelectedEditRating, 
+                    () => editCategorySelector, 
+                    () => editNewCategoryInput
+                 );
+                 setupRatingSelector(editRatingSelector, (r) => { currentSelectedEditRating = r; setupFormValidation(editInput, editCharCount, editSaveButton, MAX_CHARS, () => currentSelectedEditRating, () => editCategorySelector, () => editNewCategoryInput); }, currentSelectedEditRating);
+                 populateCategoryDropdown(editCategorySelector, categories, entryToEdit.category || DEFAULT_CATEGORY_NONE);
+                 
+                 // Initial check for "Add New..." state in edit modal
+                 handleCategoryChange(editCategorySelector, editNewCategoryInput, () => { 
+                    setupFormValidation(editInput, editCharCount, editSaveButton, MAX_CHARS, () => currentSelectedEditRating, () => editCategorySelector, () => editNewCategoryInput);
+                 }); 
+                 // Event listener for category change in edit modal
+                 editCategorySelector.addEventListener('change', () => handleCategoryChange(editCategorySelector, editNewCategoryInput, () => {
+                    setupFormValidation(editInput, editCharCount, editSaveButton, MAX_CHARS, () => currentSelectedEditRating, () => editCategorySelector, () => editNewCategoryInput);
+                 }));
+                 editNewCategoryInput.addEventListener('input', () => { // Also validate on new category input
+                    setupFormValidation(editInput, editCharCount, editSaveButton, MAX_CHARS, () => currentSelectedEditRating, () => editCategorySelector, () => editNewCategoryInput);
+                });
+            }
+            
+            // Save button logic for edit modal
+            editSaveButton.addEventListener('click', () => {
+                const newText = editInput.value.trim();
+                const finalCategory = getSelectedCategory(editCategorySelector, editNewCategoryInput); // Get category, potentially adding new one
+
+                // Validation before saving
+                if (newText === "" || currentSelectedEditRating === 0 || (editCategorySelector.value === DEFAULT_CATEGORY_ADD_NEW && editNewCategoryInput.value.trim() === "")) {
+                     if (newText === "") showToast("Entry cannot be empty.", "warning");
+                     if (currentSelectedEditRating === 0) showToast("Please select a rating.", "warning");
+                     if (editCategorySelector.value === DEFAULT_CATEGORY_ADD_NEW && editNewCategoryInput.value.trim() === "") showToast("Please enter new category name or select an existing one.", "warning");
+                    return;
+                }
+                if (newText.length > MAX_CHARS) { showToast(`Entry is too long! Max ${MAX_CHARS} chars.`, "error"); return; }
+                
+                saveEditedEntry(entryId, newText, currentSelectedEditRating, finalCategory);
+            });
+            document.getElementById('modal-cancel').addEventListener('click', closeModal);
+            
+            // Close modal if backdrop is clicked
+            const backdrop = document.getElementById('edit-modal-backdrop');
+            if (backdrop) {
+                backdrop.addEventListener('click', (event) => { if (event.target.id === 'edit-modal-backdrop') closeModal(); });
+            }
+            editInput.focus(); // Focus on the textarea
+            editInput.setSelectionRange(editInput.value.length, editInput.value.length); // Move cursor to end
+        }
+
+        // --- Confirmation Modal (Delete/Import) ---
+        function showConfirmationModal(message, onConfirmCallback, confirmButtonText = "Delete", confirmButtonClass = "bg-red-600 hover:bg-red-700") {
+            closeModal(true); // Close any other modal instantly
+            modalContainer.innerHTML = `
+                <div id="confirmation-modal-backdrop" class="fixed inset-0 bg-gray-900 bg-opacity-70 flex items-center justify-center p-4 z-40 animate-fadeIn">
+                    <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full animate-scaleUp">
+                        <p class="text-gray-800 text-lg mb-6">${escapeHTML(message)}</p>
+                        <div class="flex justify-end space-x-3">
+                            <button id="modal-cancel" class="px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400">Cancel</button>
+                            <button id="modal-confirm" class="px-4 py-2 text-white rounded-lg transition-colors focus:outline-none focus:ring-2 ${confirmButtonClass} focus:ring-opacity-75">${escapeHTML(confirmButtonText)}</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            modalContainer.classList.remove('hidden');
+            // Event listeners for confirm/cancel
+            document.getElementById('modal-confirm').addEventListener('click', () => { onConfirmCallback(); closeModal(); });
+            document.getElementById('modal-cancel').addEventListener('click', closeModal);
+            // Close on backdrop click
+            const backdrop = document.getElementById('confirmation-modal-backdrop');
+            if (backdrop) { backdrop.addEventListener('click', (event) => { if (event.target.id === 'confirmation-modal-backdrop') closeModal(); });}
+        }
+        
+        // --- Generic Modal Closing Function ---
+        function closeModal(instant = false) {
+            const activeBackdrop = document.getElementById('edit-modal-backdrop') || document.getElementById('confirmation-modal-backdrop');
+            if (!activeBackdrop) { // If no specific modal backdrop found
+                if (instant && modalContainer) { // Fallback to clear container if called directly
+                    modalContainer.innerHTML = "";
+                    modalContainer.classList.add('hidden');
+                }
+                return;
+            }
+
+            if (instant) { // Close immediately without animation
+                if(modalContainer) modalContainer.innerHTML = "";
+                if(modalContainer) modalContainer.classList.add('hidden');
+            } else { // Close with animation
+                activeBackdrop.classList.remove('animate-fadeIn');
+                activeBackdrop.classList.add('animate-fadeOutModalBackdrop');
+                
+                const innerModalContent = activeBackdrop.querySelector('.animate-scaleUp');
+                if(innerModalContent) {
+                    innerModalContent.classList.remove('animate-scaleUp');
+                    innerModalContent.classList.add('animate-scaleDownModalContent');
+                }
+                
+                setTimeout(() => { // Remove from DOM after animation
+                    if(modalContainer) modalContainer.innerHTML = ""; 
+                    if(modalContainer) modalContainer.classList.add('hidden');
+                }, 280); // Slightly less than animation duration to avoid flicker
+            }
+        }
+
+        // --- Data Export Logic ---
+        function exportData() {
+            const dataToExport = {
+                appVersion: APP_VERSION,
+                exportedAt: new Date().toISOString(),
+                entries: entries,
+                categories: categories.filter(cat => cat !== DEFAULT_CATEGORY_NONE && cat !== DEFAULT_CATEGORY_ADD_NEW) // Export clean list
+            };
+            const jsonData = JSON.stringify(dataToExport, null, 2); // Pretty print JSON
+            const blob = new Blob([jsonData], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const today = new Date().toISOString().slice(0,10); // YYYY-MM-DD format for filename
+            a.href = url;
+            a.download = `gratitude_diary_export_${today}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast("Data exported successfully!", "success");
+        }
+
+        // --- Data Import Logic ---
+        function handleImportFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Validate file type
+            if (file.type !== "application/json") {
+                showToast("Invalid file type. Please select a JSON file.", "error");
+                event.target.value = null; // Reset file input
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    
+                    // Basic validation of imported structure
+                    if (!importedData || typeof importedData !== 'object' || !Array.isArray(importedData.entries) || !Array.isArray(importedData.categories)) {
+                         showToast("Invalid JSON structure. File must contain 'entries' and 'categories' arrays.", "error");
+                         event.target.value = null; 
+                         return;
+                    }
+
+                    // Confirm overwrite with user
+                    showConfirmationModal(
+                        "Importing this file will overwrite all current entries and categories. Are you sure you want to proceed?",
+                        () => { // This is the onConfirmCallback
+                            entries = importedData.entries;
+                            // Ensure imported categories are clean and don't include control values
+                            categories = [...new Set(importedData.categories.filter(cat => cat && typeof cat === 'string' && cat !== DEFAULT_CATEGORY_NONE && cat !== DEFAULT_CATEGORY_ADD_NEW))];
+                            
+                            // If imported categories are empty, reset to default to avoid empty category list
+                            if (categories.length === 0) {
+                                categories = ["Personal", "Work", "Family", "Nature", "Health", "Learning"];
+                            }
+
+                            saveEntries();
+                            saveCategories();
+                            renderEntries();
+                            populateCategoryDropdown(mainCategorySelector, categories, DEFAULT_CATEGORY_NONE); // Update main form's category dropdown
+                            
+                            // Reset main form state after import
+                            mainEntryInput.value = "";
+                            currentSelectedMainRating = 0;
+                            if (mainRatingSelector) setupRatingSelector(mainRatingSelector, (r)=>{ currentSelectedMainRating = r; /* re-validate if needed */ }, 0);
+                            mainNewCategoryInput.value = '';
+                            mainNewCategoryInput.classList.add('hidden');
+                            setupFormValidation(mainEntryInput, mainCharCountElement, mainAddButton, MAX_CHARS, () => currentSelectedMainRating, () => mainCategorySelector, () => mainNewCategoryInput);
+                            generateReport(); // Update report after import
+
+                            showToast("Data imported successfully. All previous data replaced.", "success");
+                        },
+                        "Import & Overwrite", // Confirm button text
+                        "bg-green-500 hover:bg-green-600" // Confirm button class
+                    );
+
+                } catch (error) {
+                    console.error("Error parsing imported JSON:", error);
+                    showToast("Error parsing JSON file. Ensure it's a valid export.", "error");
+                } finally {
+                     event.target.value = null; // Reset file input in all cases after processing
+                }
+            };
+            reader.onerror = () => {
+                showToast("Error reading the file.", "error");
+                event.target.value = null; 
+            };
+            reader.readAsText(file);
+        }
+
+        // --- Report Section Logic ---
+        function initializeReportSection() {
+            if (!reportStartDateInput || !reportEndDateInput) return;
+            const today = new Date();
+            const thirtyDaysAgo = new Date(new Date().setDate(today.getDate() - 30));
+            
+            // Set default date range for the report
+            reportEndDateInput.value = today.toISOString().slice(0,10);
+            reportStartDateInput.value = thirtyDaysAgo.toISOString().slice(0,10);
+            generateReport(); // Generate initial report on page load
+        }
+
+        function generateReport() {
+            if (!reportStartDateInput || !reportEndDateInput || !gratitudeChartCanvas || !noReportDataP) return;
+
+            const startDateStr = reportStartDateInput.value;
+            const endDateStr = reportEndDateInput.value;
+
+            if (!startDateStr || !endDateStr) {
+                showToast("Please select both a start and end date for the report.", "warning");
+                return;
+            }
+
+            const startDate = new Date(startDateStr);
+            // Set end date to the end of the selected day for inclusive filtering
+            const endDate = new Date(endDateStr);
+            endDate.setHours(23, 59, 59, 999);
+
+
+            if (startDate > endDate) {
+                showToast("Start date cannot be after end date.", "warning");
+                return;
+            }
+
+            // Filter entries based on the selected date range
+            const filteredEntries = entries.filter(entry => {
+                const entryDate = new Date(entry.date);
+                return entryDate >= startDate && entryDate <= endDate;
+            });
+
+            // If no entries in the range, show message and hide chart
+            if (filteredEntries.length === 0) {
+                gratitudeChartCanvas.classList.add('hidden');
+                noReportDataP.classList.remove('hidden');
+                if (gratitudeChartInstance) { // Destroy previous chart instance if it exists
+                    gratitudeChartInstance.destroy();
+                    gratitudeChartInstance = null;
+                }
+                return;
+            }
+
+            // Process data for the chart: group by category and calculate average rating
+            const categoryData = {};
+            filteredEntries.forEach(entry => {
+                const categoryName = entry.category || "Uncategorized"; // Group null/empty categories
+                if (!categoryData[categoryName]) {
+                    categoryData[categoryName] = { totalRating: 0, count: 0 };
+                }
+                categoryData[categoryName].totalRating += (entry.rating || 0); // Ensure rating is a number
+                categoryData[categoryName].count++;
+            });
+
+            const reportLabels = [];
+            const reportValues = [];
+
+            for (const categoryName in categoryData) {
+                reportLabels.push(categoryName);
+                reportValues.push(categoryData[categoryName].totalRating / categoryData[categoryName].count); // Calculate average
+            }
+            
+            renderChart(reportLabels, reportValues);
+        }
+
+        function renderChart(labels, data) {
+            if (!gratitudeChartCanvas || !noReportDataP) return;
+
+            gratitudeChartCanvas.classList.remove('hidden'); // Show canvas
+            noReportDataP.classList.add('hidden'); // Hide "no data" message
+
+            // Destroy previous chart instance if it exists, to prevent conflicts
+            if (gratitudeChartInstance) {
+                gratitudeChartInstance.destroy();
+            }
+
+            // Define colors for the chart bars
+            const chartColors = [
+                'rgba(129, 140, 248, 0.6)', // indigo-400
+                'rgba(251, 146, 60, 0.6)',  // orange-400
+                'rgba(52, 211, 153, 0.6)',  // emerald-400
+                'rgba(239, 68, 68, 0.6)',   // red-500
+                'rgba(249, 115, 22, 0.6)',  // amber-500
+                'rgba(16, 185, 129, 0.6)',  // green-500
+                'rgba(99, 102, 241, 0.6)',  // indigo-500
+                'rgba(236, 72, 153, 0.6)'   // pink-500
+            ];
+            // Create border colors from background colors with full opacity
+            const borderColors = chartColors.map(color => color.replace('0.6', '1'));
+
+
+            // Create new Chart.js instance
+            gratitudeChartInstance = new Chart(gratitudeChartCanvas, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Average Gratitude Rating',
+                        data: data,
+                        backgroundColor: chartColors,
+                        borderColor: borderColors,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false, // Allows chart to fill container height
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 3, // Max rating
+                            ticks: {
+                                stepSize: 0.5,
+                                color: '#4b5563' // Tailwind gray-600 for tick labels
+                            },
+                            grid: {
+                                color: '#e5e7eb' // Tailwind gray-200 for grid lines
+                            }
+                        },
+                        x: {
+                             ticks: {
+                                color: '#4b5563' // Tailwind gray-600
+                            },
+                            grid: {
+                                display: false // Hide vertical grid lines for cleaner look
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false // Hiding legend as dataset label is clear enough
+                        },
+                        title: {
+                            display: true,
+                            text: 'Average Gratitude by Category',
+                            padding: {
+                                top: 10,
+                                bottom: 20
+                            },
+                            font: {
+                                size: 16,
+                                weight: '600' // Semibold
+                            },
+                            color: '#374151' // Tailwind gray-700
+                        },
+                        tooltip: { // Customize tooltips
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += context.parsed.y.toFixed(2); // Format to 2 decimal places
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+    </script>
+</body>
+</html>
